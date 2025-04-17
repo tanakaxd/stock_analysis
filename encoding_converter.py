@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # 入力ディレクトリと出力ディレクトリのパス
-input_dir = "./data"
+input_dir = "./data"  # Shift-JIS形式で保存されたディレクトリ
 output_dir = "./data_utf8"
 
 # UTF-8形式で保存するディレクトリを作成

@@ -13,6 +13,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # Date range for 2020 to 2024
 start_date = datetime(2020, 1, 1)
 end_date = datetime(2024, 12, 31)
+# start_date = datetime(2019, 1, 1)
+# end_date = datetime(2019, 12, 31)
 
 # Iterate through each date in the range
 current_date = start_date
