@@ -10,6 +10,7 @@ url = "https://www.jpx.co.jp/listing/stocks/new/00-archives-01.html"
 response = requests.get(url)
 soup = BeautifulSoup(response.content, "html.parser")
 
+# IPO銘柄の上場日、会社名、銘柄コード、市場区分、公開価格を取得
 # 銘柄コードを抽出（<span id="302A">のような形式を満たす要素）
 ipo_list = []
 for span in soup.find_all("span", id=True):  # id属性を持つ<span>タグを検索
