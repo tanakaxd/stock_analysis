@@ -5,8 +5,10 @@ import traceback
 from tqdm import tqdm  # tqdmライブラリをインポート
 
 # CSVファイルを読み込む
-csv_file = "ipo_list_2024.csv"
+csv_file = "ipo_list_2024_2021.csv"
 ipo_data = pd.read_csv(csv_file)
+# 取得したデータの最初の45行をinvalidとして削除
+ipo_data = ipo_data.iloc[41:]
 
 # 公開価格を数値に変換（カンマを削除してfloat型に変換）
 ipo_data["public_price"] = ipo_data["public_price"].replace(",", "", regex=True).astype(float)
@@ -15,7 +17,7 @@ ipo_data["public_price"] = ipo_data["public_price"].replace(",", "", regex=True)
 results = []
 
 # デバグ用にループ回数を制限
-loop_limit = 100  # ループ回数制限
+loop_limit = 10  # ループ回数制限
 loop_count = 0
 
 # 各銘柄のデータを取得
@@ -88,10 +90,9 @@ for index, row in tqdm(ipo_data.iterrows(), total=len(ipo_data), desc="Processin
             "price_180_days": price_180_days,
             "current_price": current_price
         })
-        loop_count += 1
-        if loop_count >= loop_limit:  # デバッグ用にループ回数を制限
-            break
-        # print(f"Processed {ticker}: {results[-1]}")  # デバッグ用出力
+        # loop_count += 1
+        # if loop_count >= loop_limit:  # デバッグ用にループ回数を制限
+        #     break
         # break  # デバッグ用に1銘柄のみ処理
     except Exception as e:
         print(f"Failed to process {ticker}: {e}")
