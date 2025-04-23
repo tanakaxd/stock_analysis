@@ -9,9 +9,10 @@ import seaborn as sns
 # 1. 日経先物の2025年5分足データを取得
 def fetch_nikkei_futures_data():
     # ticker = "NIY=F"  # 日経先物のティッカー
-    ticker = "^N225"  # 日経平均のティッカー
-    # ticker = "6857.T"  # 日経平均のティッカー
-    df = yf.download(ticker, start="2025-02-21", end="2025-04-18", interval="5m")
+    # ticker = "^N225"  # 日経平均のティッカー
+    ticker = "6857.T"  # 日経平均のティッカー
+    df = yf.download(ticker, start="2025-02-23", end="2025-04-22", interval="5m")
+    print(f"ticker: {ticker}")
     if isinstance(df.columns, pd.MultiIndex):
         print("MultiIndex detected, flattening...")
         df.columns = df.columns.get_level_values(0)
@@ -47,7 +48,7 @@ def detect_escalier_patterns(data):
 def analyze_trend(data, patterns):
     results = []
     # data = data.copy()  # データをコピーして元のデータを変更しないようにする
-    candles_ahead_count = 5  # 何本先のローソク足までを対象として分析するか
+    candles_ahead_count = 20  # 何本先のローソク足までを対象として分析するか
 
     for pattern_time in patterns:
         # パターン後のデータを取得
