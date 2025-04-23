@@ -4,6 +4,8 @@ from datetime import timedelta
 
 # 1. 株価データの取得
 ticker = "6857.T"  # アドバンテスト
+# ticker = "7203.T"  # トヨタ自動車
+# ticker = "6758.T"  # ソニーグループ
 data = yf.download(ticker, interval="5m", start="2025-02-23", end="2025-04-23")  # 過去5日間の5分足データ
 if isinstance(data.columns, pd.MultiIndex):
     print("MultiIndex detected, flattening...")
@@ -37,8 +39,8 @@ data["Session"] = data["Time"].apply(assign_session)
 # 前場・後場以外のデータを削除
 data = data.dropna(subset=["Session"])
 
-# 3. トレード戦略の実装
-def trade_strategy(data):
+# 3. トレード戦略の実装（利幅をパラメータ化）
+def trade_strategy(data, target_profit):
     results = {
         "Morning": {"success": 0, "fail": 0, "total_profit": 0},
         "Afternoon": {"success": 0, "fail": 0, "total_profit": 0},
@@ -70,8 +72,8 @@ def trade_strategy(data):
             # 陽線の場合
             if prev_candle > 0:
                 trade_type = "Sell"
-                target_price = current_open - 10  # 利幅10円を目標
-                if current_low <= target_price:  # 利幅10円に到達
+                target_price = current_open - target_profit  # 利幅を動的に設定
+                if current_low <= target_price:  # 利幅に到達
                     exit_price = target_price
                     profit_or_loss = current_open - target_price
                     results[session]["success"] += 1
@@ -83,8 +85,8 @@ def trade_strategy(data):
             # 陰線の場合
             elif prev_candle < 0:
                 trade_type = "Buy"
-                target_price = current_open + 10  # 利幅10円を目標
-                if current_high >= target_price:  # 利幅10円に到達
+                target_price = current_open + target_profit  # 利幅を動的に設定
+                if current_high >= target_price:  # 利幅に到達
                     exit_price = target_price
                     profit_or_loss = target_price - current_open
                     results[session]["success"] += 1
@@ -109,42 +111,30 @@ def trade_strategy(data):
 
     return results, trades
 
-# 4. トレード戦略の検証
-results, trades = trade_strategy(data)
+# 利幅を変えて検証
+target_profits = [i for i in range(15,31)]  # 利幅のリスト
+# 2n(n=1,2...5) の配列を生成
+# target_profits = [n for n in range(1, 11)]  # 1から10までの整数を生成
 
-# 5. 前場と後場の結果を表示
-print("Morning Session Results:")
-print(f"Success: {results['Morning']['success']}, Fail: {results['Morning']['fail']}")
-print(f"Total Profit: {results['Morning']['total_profit']}")
+for target_profit in target_profits:
+    print(f"\n=== 利幅: {target_profit}円 ===")
+    results, trades = trade_strategy(data, target_profit)
 
-print("Afternoon Session Results:")
-print(f"Success: {results['Afternoon']['success']}, Fail: {results['Afternoon']['fail']}")
-print(f"Total Profit: {results['Afternoon']['total_profit']}")
+    # 結果を表示
+    print("Morning Session Results:")
+    print(f"Success: {results['Morning']['success']}, Fail: {results['Morning']['fail']}")
+    print(f"Total Profit: {results['Morning']['total_profit']}")
 
-# 6. 各取引の詳細を表示
-# print("\nTrade Details:")
-# for trade in trades:
-#     print(trade)
+    print("Afternoon Session Results:")
+    print(f"Success: {results['Afternoon']['success']}, Fail: {results['Afternoon']['fail']}")
+    print(f"Total Profit: {results['Afternoon']['total_profit']}")
 
-# 7. 前場が成功した場合の後場の結果、またその逆を検証
-if results["Morning"]["total_profit"] > 0:
-    print("\nMorning session was profitable. Checking afternoon session results...")
-else:
-    print("\nMorning session was not profitable. Checking afternoon session results...")
-
-if results["Afternoon"]["total_profit"] > 0:
-    print("Afternoon session was profitable.")
-else:
-    print("Afternoon session was not profitable.")
-
-# 8. 取引データをCSVファイルに保存
-# Time (JST) を日付と時間に分離
-trades_df = pd.DataFrame(trades)  # tradesリストをデータフレームに変換
-trades_df["Date"] = trades_df["Time (JST)"].dt.date  # 日付部分を抽出
-trades_df["Time"] = trades_df["Time (JST)"].dt.time  # 時間部分を抽出
-trades_df = trades_df.drop(columns=["Time (JST)"])  # 元の列を削除
-
-# 保存するCSVファイル名
-output_file = "trade_data_6857_60days.csv"
-trades_df.to_csv(output_file, index=False, encoding="utf-8-sig")  # CSVファイルに保存
-print(f"\nTrade data saved to {output_file}")
+    # 必要に応じて取引データをCSVに保存
+    trades_df = pd.DataFrame(trades)
+    trades_df["Date"] = trades_df["Time (JST)"].dt.date
+    trades_df["Time"] = trades_df["Time (JST)"].dt.time
+    trades_df = trades_df.drop(columns=["Time (JST)"])
+    ticker_num = ticker.split(".")[0]
+    output_file = f"trade_data_{ticker_num}_{target_profit}yen.csv"
+    trades_df.to_csv(output_file, index=False, encoding="utf-8-sig")
+    print(f"Trade data saved to {output_file}")

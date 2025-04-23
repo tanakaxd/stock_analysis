@@ -7,7 +7,7 @@ from scipy.stats import pearsonr, spearmanr
 
 # データを読み込む（ファイル名を適宜変更してください）
 # 例: data.csv というCSVファイルを読み込む
-data = pd.read_csv('trade_data_6857_60days.csv')
+data = pd.read_csv('trade_data_6857_25yen.csv')
 
 # データの先頭を確認
 print(data.head())
