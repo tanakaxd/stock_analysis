@@ -6,10 +6,15 @@ from datetime import timedelta
 ticker = "6857.T"  # アドバンテスト
 # ticker = "7203.T"  # トヨタ自動車
 # ticker = "6758.T"  # ソニーグループ
-data = yf.download(ticker, interval="5m", start="2025-02-23", end="2025-04-23")  # 過去5日間の5分足データ
+data = yf.download(ticker, interval="5m", start="2025-02-24", end="2025-04-24")  # 過去5日間の5分足データ
+# data = yf.download(ticker, interval="5m", start="2025-04-22", end="2025-04-23")  # 過去5日間の5分足データ
 if isinstance(data.columns, pd.MultiIndex):
     print("MultiIndex detected, flattening...")
     data.columns = data.columns.get_level_values(0)
+# データの全行を出力
+print("=== 取得したデータ ===")
+print(data)
+
 
 # データが空の場合は終了
 if data.empty:
@@ -112,7 +117,8 @@ def trade_strategy(data, target_profit):
     return results, trades
 
 # 利幅を変えて検証
-target_profits = [i for i in range(15,31)]  # 利幅のリスト
+# target_profits = [i for i in range(15,31)]  # 利幅のリスト
+target_profits = [18]  # 利幅のリスト
 # 2n(n=1,2...5) の配列を生成
 # target_profits = [n for n in range(1, 11)]  # 1から10までの整数を生成
 
