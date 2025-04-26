@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 # Load the CSV file
-df = pd.read_csv('trade_data_6857\profit_results_6857.csv', encoding='utf-8-sig')
+df = pd.read_csv('candle_switch_trade_data_6857_losscut_first\profit_results_6857.csv', encoding='utf-8-sig')
 
 # Extract unique values for Target Profit and Stop Loss
 target_profits = np.sort(df['Target Profit'].unique())

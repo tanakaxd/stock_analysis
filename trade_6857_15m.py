@@ -7,7 +7,7 @@ from datetime import timedelta
 ticker = "6857.T"  # アドバンテスト
 # ticker = "7203.T"  # トヨタ自動車
 # ticker = "6758.T"  # ソニーグループ
-data = yf.download(ticker, interval="5m", start="2025-02-25", end="2025-04-25")  # 過去5日間の5分足データ
+data = yf.download(ticker, interval="15m", start="2025-02-25", end="2025-04-25")  # 過去5日間の5分足データ
 # data = yf.download(ticker, interval="5m", start="2025-04-22", end="2025-04-23")  # 過去5日間の5分足データ
 if isinstance(data.columns, pd.MultiIndex):
     print("MultiIndex detected, flattening...")
@@ -42,11 +42,15 @@ def assign_session(time):
 # Session列を作成
 data["Session"] = data["Time"].apply(assign_session)
 
+print(data)
+
 # 前場・後場以外のデータを削除
 data = data.dropna(subset=["Session"])
 
+print(data)
+
+
 # トレード戦略の実装（利幅と損切り幅をパラメータ化）
-# 簡易的修正として損切りラインへの接触が常に利確ラインとの接触より先に起こると仮定してみる
 def trade_strategy(data, target_profit, stop_loss):
     results = {
         "success": 0,
@@ -81,14 +85,14 @@ def trade_strategy(data, target_profit, stop_loss):
             trade_type = "Sell"
             target_price = current_open - target_profit  # 利確幅
             stop_price = current_open + stop_loss  # 損切り幅
-            if current_high >= stop_price:  # 損切りに到達
-                exit_price = stop_price
-                profit_or_loss = current_open - stop_price
-                results["fail"] += 1
-            elif current_low <= target_price:  # 利確に到達
+            if current_low <= target_price:  # 利確に到達
                 exit_price = target_price
                 profit_or_loss = current_open - target_price
                 results["success"] += 1
+            elif current_high >= stop_price:  # 損切りに到達
+                exit_price = stop_price
+                profit_or_loss = current_open - stop_price
+                results["fail"] += 1
             else:  # 終値で決済
                 exit_price = current_close
                 profit_or_loss = current_open - current_close
@@ -99,14 +103,14 @@ def trade_strategy(data, target_profit, stop_loss):
             trade_type = "Buy"
             target_price = current_open + target_profit  # 利確幅
             stop_price = current_open - stop_loss  # 損切り幅
-            if current_low <= stop_price:  # 損切りに到達
-                exit_price = stop_price
-                profit_or_loss = stop_price - current_open
-                results["fail"] += 1
-            elif current_high >= target_price:  # 利確に到達
+            if current_high >= target_price:  # 利確に到達
                 exit_price = target_price
                 profit_or_loss = target_price - current_open
                 results["success"] += 1
+            elif current_low <= stop_price:  # 損切りに到達
+                exit_price = stop_price
+                profit_or_loss = stop_price - current_open
+                results["fail"] += 1
             else:  # 終値で決済
                 exit_price = current_close
                 profit_or_loss = current_close - current_open
@@ -133,8 +137,8 @@ def trade_strategy(data, target_profit, stop_loss):
     return results, trades
 
 # 利確幅と損切り幅を変えて検証
-target_profits = [i for i in range(0, 100)]  # 利幅のリスト
-stop_losses = [i for i in range(0, 100)]  # 損切り幅
+target_profits = [i for i in range(1, 1)]  # 利幅のリスト
+stop_losses = [i for i in range(1, 1)]  # 損切り幅
 
 # 組み合わせごとの結果を記録するリスト
 profit_results = []
@@ -169,7 +173,7 @@ for target_profit in target_profits:
 
         # ファイル名を生成
         ticker_num = ticker.split(".")[0]
-        output_dir = f"candle_switch_trade_data_{ticker_num}_losscut_first"
+        output_dir = f"trade_data_{ticker_num}"
 
         # ディレクトリが存在しない場合は作成
         if not os.path.exists(output_dir):
