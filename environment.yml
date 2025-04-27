@@ -1,0 +1,12 @@
+name: tf_env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8.10
+  - tensorflow
+  - numpy<2.0
+  - yfinance
+  - pandas
+  - scikit-learn
+  - matplotlib

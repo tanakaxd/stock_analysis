@@ -7,7 +7,7 @@ from datetime import timedelta
 ticker = "6857.T"  # アドバンテスト
 # ticker = "7203.T"  # トヨタ自動車
 # ticker = "6758.T"  # ソニーグループ
-data = yf.download(ticker, interval="5m", start="2025-02-25", end="2025-04-25")  # 過去5日間の5分足データ
+data = yf.download(ticker, interval="5m", start="2025-02-27", end="2025-04-25")  # 過去5日間の5分足データ
 # data = yf.download(ticker, interval="5m", start="2025-04-22", end="2025-04-23")  # 過去5日間の5分足データ
 if isinstance(data.columns, pd.MultiIndex):
     print("MultiIndex detected, flattening...")
@@ -133,8 +133,8 @@ def trade_strategy(data, target_profit, stop_loss):
     return results, trades
 
 # 利確幅と損切り幅を変えて検証
-target_profits = [i for i in range(0, 100)]  # 利幅のリスト
-stop_losses = [i for i in range(0, 100)]  # 損切り幅
+target_profits = [i for i in range(0, 1)]  # 利幅のリスト
+stop_losses = [i for i in range(0, 1)]  # 損切り幅
 
 # 組み合わせごとの結果を記録するリスト
 profit_results = []
@@ -185,6 +185,6 @@ for target_profit in target_profits:
 profit_results_df = pd.DataFrame(profit_results)
 
 # 結果をCSVに保存
-output_file = os.path.join(output_dir, f"profit_results_{ticker_num}.csv")
-profit_results_df.to_csv(output_file, index=False, encoding="utf-8-sig")
-print(f"Profit results saved to {output_file}")
+# output_file = os.path.join(output_dir, f"profit_results_{ticker_num}.csv")
+# profit_results_df.to_csv(output_file, index=False, encoding="utf-8-sig")
+# print(f"Profit results saved to {output_file}")
