@@ -75,8 +75,9 @@ plt.close()
 top_params = df[
     (df['cumulative_return'] > 1.1) & 
     (df['sharpe_ratio'] > 2) & 
-    (df['trade_count'] < 200)
-].sort_values('cumulative_return', ascending=False).head(5)
+    # (df['trade_count'] < 300) & 
+    (df['total_cost'] < 0.02)
+].sort_values('cumulative_return', ascending=False).head(20)
 
 # Save top parameter sets to CSV
 top_params.to_csv('top_parameter_sets.csv', index=False)
