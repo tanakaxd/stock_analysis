@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 # パラメータ
 DATA_DIR = 'data_utf8'
 MODEL_DIR = 'model'
+COMBINED_DATA_PATH = os.path.join(MODEL_DIR, 'nikkei_combined_5min.csv')
 SEQUENCE_LENGTH = 100
 LOOKAHEAD_PERIOD = 10
 SCALING_FACTOR = 200
@@ -26,7 +27,14 @@ SHAP_PLOT_PATH = os.path.join(MODEL_DIR, 'shap_summary.png')
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # 1. データ取得・統合
-def load_and_combine_data(data_dir):
+def load_and_combine_data(data_dir, combined_data_path):
+    # 結合済みCSVが存在する場合、直接読み込む
+    if os.path.exists(combined_data_path):
+        print(f"結合済みデータ {combined_data_path} を読み込み中...")
+        combined_df = pd.read_csv(combined_data_path, parse_dates=['datetime'], index_col='datetime')
+        return combined_df
+    
+    # 全ファイルを探索して結合
     all_data = []
     for root, _, files in os.walk(data_dir):
         for file in files:
@@ -35,9 +43,9 @@ def load_and_combine_data(data_dir):
                 try:
                     # CSV読み込み（ヘッダー2行、UTF-8）
                     df = pd.read_csv(file_path, encoding='utf-8', header=[0, 1])
-                    # 必要な行と列を抽出（0–76行目、col1 + P:U列）
-                    df = df.iloc[:77, [0, 15, 16, 17, 18, 19, 20]]
-                    # 列名を設定（col1は日付）
+                    # 必要な列を抽出（col1 + P:U列）
+                    df = df.iloc[:77, [0, 15, 16, 17, 18, 19, 20]]  # 0–76行目
+                    # マルチインデックスをフラット化
                     df.columns = ['date', 'time', 'open', 'high', 'low', 'close', 'volume']
                     all_data.append(df)
                 except Exception as e:
@@ -46,8 +54,21 @@ def load_and_combine_data(data_dir):
     # データフレームを結合
     combined_df = pd.concat(all_data, ignore_index=True)
     
-    # 日付をパース（形式: 24/10/01）
-    combined_df['date'] = pd.to_datetime(combined_df['date'], format='%y/%m/%d')
+    # 日付をパース（20/11/19 または 2020/11/19）
+    def parse_date(date_str):
+        try:
+            return pd.to_datetime(date_str, format='%y/%m/%d')
+        except:
+            try:
+                return pd.to_datetime(date_str, format='%Y/%m/%d')
+            except:
+                print(f"日付パースエラー: {date_str}")
+                return pd.NaT
+    
+    combined_df['date'] = combined_df['date'].apply(parse_date)
+    
+    # 欠損日付を除外
+    combined_df = combined_df.dropna(subset=['date'])
     
     # 日付と時刻を結合してdatetime列を作成
     combined_df['datetime'] = pd.to_datetime(combined_df['date'].astype(str) + ' ' + combined_df['time'])
@@ -62,6 +83,10 @@ def load_and_combine_data(data_dir):
     
     # 不要な列を削除
     combined_df = combined_df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
+    
+    # 結合済みデータをCSVに保存
+    print(f"結合済みデータを {combined_data_path} に保存中...")
+    combined_df.to_csv(combined_data_path, index=True)
     
     return combined_df
 
@@ -116,7 +141,7 @@ def analyze_feature_importance(model, X_val, feature_names):
 def main():
     # データ読み込み
     print("データを読み込み中...")
-    df = load_and_combine_data(DATA_DIR)
+    df = load_and_combine_data(DATA_DIR, COMBINED_DATA_PATH)
     
     # 特徴量エンジニアリング
     print("特徴量を計算中...")
@@ -176,6 +201,7 @@ def main():
     model.save(MODEL_PATH)
     
     print("処理完了！")
+    print(f"結合済みデータ: {COMBINED_DATA_PATH}")
     print(f"モデル: {MODEL_PATH}")
     print(f"スケーラー: {SCALER_PATH}")
     print(f"SHAPプロット: {SHAP_PLOT_PATH}")
