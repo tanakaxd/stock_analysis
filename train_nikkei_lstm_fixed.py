@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 SEQUENCE_LENGTH = 100
 LOOKAHEAD_PERIOD = 10
 SCALING_FACTOR = 200
-THRESHOLD = 0.2
+THRESHOLD = 0.05  # Reduced to allow more trades
 MAX_POSITION = 2.0
 TRANSACTION_COST = 0.001
 
@@ -88,8 +88,13 @@ def main():
     print(f"Future_Return distribution:\n{data['Future_Return'].describe()}")
     
     # データ準備
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data[FEATURES + ['Future_Return']])
+    feature_data = data[FEATURES].values
+    target_data = data[['Future_Return']].values
+    feature_scaler = MinMaxScaler()
+    target_scaler = MinMaxScaler(feature_range=(-1, 1))  # Increase target variance
+    feature_data = feature_scaler.fit_transform(feature_data)
+    target_data = target_scaler.fit_transform(target_data)
+    scaled_data = np.hstack([feature_data, target_data])
     
     print("シーケンスデータを作成中...")
     X, y, seq_indices = create_sequences(scaled_data, SEQUENCE_LENGTH, LOOKAHEAD_PERIOD)
@@ -110,19 +115,19 @@ def main():
     # LSTMモデル
     print("モデルを構築中...")
     model = Sequential([
-        LSTM(64, return_sequences=True, input_shape=(SEQUENCE_LENGTH, len(FEATURES))),
+        LSTM(128, return_sequences=True, input_shape=(SEQUENCE_LENGTH, len(FEATURES))),  # Increased capacity
         Dropout(0.2),
-        LSTM(32),
+        LSTM(64),
         Dropout(0.2),
         Dense(1)
     ])
     model.compile(optimizer='adam', loss='mse')
     
     print("モデルを学習中...")
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)  # Increased patience
     history = model.fit(
         X_train, y_train,
-        epochs=30,
+        epochs=50,  # Increased epochs
         batch_size=32,
         validation_data=(X_test, y_test),
         callbacks=[early_stopping],

@@ -11,7 +11,7 @@ import pandas_ta as ta
 # データ取得
 ticker = "9432.T"  
 try:
-    data = yf.download(ticker, interval="5m", start="2025-02-27", end="2025-04-27")
+    data = yf.download(ticker, interval="5m", start="2025-03-01", end="2025-04-29")
     if data.empty:
         raise ValueError("データが取得できませんでした。")
     if isinstance(data.columns, pd.MultiIndex):
