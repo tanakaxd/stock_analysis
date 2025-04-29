@@ -1,23 +1,14 @@
-from scipy.stats import norm
+import pandas as pd
 
-# 観測された確率と仮定された確率
-observed_probability = 0.4705  # 47.05%
-expected_probability = 0.4    # 40%
-sample_size = 13470           # サンプルサイズ
+# CSVファイルを読み込む
+df = pd.read_csv("nikkei_combined_5min_cleaned.csv")
 
-# z統計量を計算
-z = (observed_probability - expected_probability) / ((expected_probability * (1 - expected_probability)) / sample_size) ** 0.5
+# datetime列をdatetime型に変換（必要なら）
+df["datetime"] = pd.to_datetime(df["datetime"])
 
-# 両側検定のp値を計算
-p_value = 2 * (1 - norm.cdf(abs(z)))
+# 重複しているdatetimeの行を抽出
+duplicate_rows = df[df.duplicated(subset=["datetime"], keep=False)]
 
-# 結果を出力
-print(f"z統計量: {z:.4f}")
-print(f"p値: {p_value:.4f}")
-
-# 有意性の判定
-alpha = 0.05  # 有意水準
-if p_value < alpha:
-    print("観測された確率は仮定された確率と有意に異なります（帰無仮説を棄却）。")
-else:
-    print("観測された確率は仮定された確率と有意に異ならない（帰無仮説を採択）。")
+# 重複している日時を表示
+print("重複しているdatetime:")
+print(duplicate_rows)
