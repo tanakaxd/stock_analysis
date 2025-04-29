@@ -65,10 +65,12 @@ def engineer_features(df):
 # 3. シーケンスデータ作成
 def create_sequences(data, seq_length, look_ahead):
     X, y = [], []
-    for i in range(len(data) - seq_length - look_ahead):
-        X.append(data[i:i + seq_length])
-        y.append(data[i + seq_length + look_ahead - 1, -1])  # Future_Return is the last column
-    return np.array(X), np.array(y)
+    indices = []
+    for i in range(len(data) - seq_length - look_ahead + 1):
+        X.append(data[i:(i + seq_length), :len(FEATURES)])
+        y.append(data[i + seq_length + look_ahead - 1, len(FEATURES)])
+        indices.append(i + seq_length + look_ahead - 1)
+    return np.array(X), np.array(y), indices
 
 # メイン処理
 def main():
@@ -90,7 +92,7 @@ def main():
     scaled_data = scaler.fit_transform(data[FEATURES + ['Future_Return']])
     
     print("シーケンスデータを作成中...")
-    X, y = create_sequences(scaled_data, SEQUENCE_LENGTH, LOOKAHEAD_PERIOD)
+    X, y, seq_indices = create_sequences(scaled_data, SEQUENCE_LENGTH, LOOKAHEAD_PERIOD)
     
     if len(X) < 50:
         print("シーケンスデータが不足しています。")
@@ -136,11 +138,18 @@ def main():
     
     # 予測
     print("予測を生成中...")
-    predictions = model.predict(X, verbose=0)  # Predict on full dataset
+    predictions = model.predict(X, verbose=0)
     
     # 予測結果をデータフレームに追加
-    pred_indices = data.index[SEQUENCE_LENGTH-1:len(X)+SEQUENCE_LENGTH-1]
-    data['Predicted_Return'] = pd.Series(np.concatenate([np.zeros(SEQUENCE_LENGTH-1), predictions.flatten()]), index=data.index)
+    pred_df = pd.DataFrame({
+        'Predicted_Return': predictions.flatten()
+    }, index=data.index[seq_indices])
+    
+    data = data.join(pred_df, how='left')
+    data['Predicted_Return'] = data['Predicted_Return'].fillna(0)
+    
+    # Debug: Check Predicted_Return
+    print(f"Predicted_Return distribution:\n{data['Predicted_Return'].describe()}")
     
     # ポジションサイジング
     print("ポジションサイジングを計算中...")
@@ -159,7 +168,7 @@ def main():
     
     # 結果評価
     print("結果を評価中...")
-    cumulative_return =而且(1 + data['Strategy_Return'].fillna(0)).cumprod().iloc[-1]
+    cumulative_return = (1 + data['Strategy_Return'].fillna(0)).cumprod().iloc[-1]
     sharpe_ratio = data['Strategy_Return'].mean() / data['Strategy_Return'].std() * np.sqrt(252 * 66) if data['Strategy_Return'].std() != 0 else 0
     trade_count = int(data['Position_Size'].diff().abs().gt(0).sum())
     total_cost = TRANSACTION_COST * data['Position_Size'].diff().abs().sum()

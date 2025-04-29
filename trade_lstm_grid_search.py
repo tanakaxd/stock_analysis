@@ -1,198 +1,121 @@
-import os
+import yfinance as yf
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-import pandas_ta as ta
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 import matplotlib.pyplot as plt
+import pandas_ta as ta
+from itertools import product
+from tqdm import tqdm
+import uuid
 
-# Fixed parameters
-SEQUENCE_LENGTH = 100
-LOOKAHEAD_PERIOD = 10
-SCALING_FACTOR = 200
-THRESHOLD = 0.2
-MAX_POSITION = 2.0
-TRANSACTION_COST = 0.001
+# Load tickers from CSV
+csv_data = pd.read_csv('daytrade_stocks.csv')
+tickers = csv_data['ticker'].tolist()
 
-# File paths
-MODEL_DIR = 'model'
-COMBINED_DATA_PATH = os.path.join(MODEL_DIR, 'nikkei_combined_5min.csv')
-RESULTS_PATH = os.path.join(MODEL_DIR, 'trading_results.csv')
-PLOT_PATH = os.path.join(MODEL_DIR, 'strategy_performance.png')
-FEATURES = ['Close', 'Returns', 'RSI', 'MACD', 'BB_Upper', 'BB_Lower', 'Sentiment_Proxy']
+# Parameter grid
+sequence_lengths = [20, 50, 100]
+lookahead_periods = [3, 5, 10]
+scaling_factors = [50, 100, 200]
+thresholds = [0.05, 0.1, 0.2]
 
-# 1. データ読み込み
-def load_data(file_path):
-    df = pd.read_csv(file_path, parse_dates=['datetime'])
-    if df.columns[0].startswith('Unnamed') or df.columns[0] == '':
-        df = df.drop(columns=df.columns[0])
-    df = df.set_index('datetime')
-    if df.index.duplicated().any():
-        print(f"Found {df.index.duplicated().sum()} duplicate timestamps. Dropping duplicates.")
-        df = df[~df.index.duplicated(keep='first')]
-    df = df.dropna()
-    
-    # Filter date range
-    start_date = pd.to_datetime('2024-02-27')
-    end_date = pd.to_datetime('2024-04-27')
-    df = df[(df.index >= start_date) & (df.index <= end_date)]
-    
-    return df
+# Results storage
+results = []
 
-# 2. 特徴量エンジニアリング
-def engineer_features(df):
-    df = df.copy()
-    
-    df['Close'] = df['close']
-    df['Returns'] = df['close'].pct_change()
-    df['Future_Return'] = (df['close'].shift(-LOOKAHEAD_PERIOD) - df['close']) / df['close']
-    df['RSI'] = ta.rsi(df['close'], length=14)
-    df['MACD'] = ta.macd(df['close'], fast=12, slow=26, signal=9)['MACD_12_26_9']
-    bb = ta.bbands(df['close'], length=20, std=2)
-    df['BB_Upper'] = bb['BBU_20_2.0']
-    df['BB_Lower'] = bb['BBL_20_2.0']
-    df['Price_Spread'] = (df['high'] - df['low']) / df['close']
-    df['Sentiment_Proxy'] = df['Price_Spread'] * df['volume']
-    
-    df[FEATURES + ['Future_Return']] = df[FEATURES + ['Future_Return']].replace([np.inf, -np.inf], np.nan)
-    df[FEATURES + ['Future_Return']] = df[FEATURES + ['Future_Return']].interpolate(method='linear').fillna(method='bfill')
-    df = df.dropna(subset=FEATURES + ['Future_Return'])
-    
-    return df
+# Grid search
+for ticker, seq_len, look_ahead, scale_factor, thresh in tqdm(product(tickers, sequence_lengths, lookahead_periods, scaling_factors, thresholds), total=len(tickers) * len(sequence_lengths) * len(lookahead_periods) * len(scaling_factors) * len(thresholds)):
+    try:
+        # データ取得
+        data = yf.download(ticker, interval="5m", start="2025-02-27", end="2025-04-27")
+        if data.empty or len(data) < 100:
+            continue
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
 
-# 3. シーケンスデータ作成
-def create_sequences(data, seq_length, look_ahead):
-    X, y = [], []
-    for i in range(len(data) - seq_length - look_ahead + 1):
-        X.append(data[i:(i + seq_length), :len(FEATURES)])  # Use only FEATURES (7 columns)
-        y.append(data[i + seq_length + look_ahead - 1, len(FEATURES)])  # Future_Return is the last column
-    return np.array(X), np.array(y)
+        # テクニカル指標
+        data['Returns'] = data['Close'].pct_change()
+        data['Future_Return'] = (data['Close'].shift(-look_ahead) - data['Close']) / data['Close']
+        data['RSI'] = ta.rsi(data['Close'], length=14)
+        data['MACD'] = ta.macd(data['Close'], fast=12, slow=26, signal=9)['MACD_12_26_9']
+        data['BB_Upper'] = ta.bbands(data['Close'], length=20, std=2)['BBU_20_2.0']
+        data['BB_Lower'] = ta.bbands(data['Close'], length=20, std=2)['BBL_20_2.0']
+        data['Price_Spread'] = (data['High'] - data['Low']) / data['Close']
+        data['Sentiment_Proxy'] = data['Price_Spread'] * data['Volume']
 
-# メイン処理
-def main():
-    print("データを読み込み中...")
-    data = load_data(COMBINED_DATA_PATH)
-    
-    if data.empty or len(data) < 100:
-        print("データが不足しています。")
-        return
-    
-    print("特徴量を計算中...")
-    data = engineer_features(data)
-    
-    # Debug: Check Future_Return
-    print(f"Future_Return distribution:\n{data['Future_Return'].describe()}")
-    
-    # データ準備
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data[FEATURES + ['Future_Return']])
-    
-    print("シーケンスデータを作成中...")
-    X, y = create_sequences(scaled_data, SEQUENCE_LENGTH, LOOKAHEAD_PERIOD)
-    
-    if len(X) < 50:
-        print("シーケンスデータが不足しています。")
-        return
-    
-    # 訓練・テストデータ分割
-    train_size = int(0.8 * len(X))
-    X_train, X_test = X[:train_size], X[train_size:]
-    y_train, y_test = y[:train_size], y[train_size:]
-    
-    # Debug: Check shapes and target distribution
-    print(f"X shape: {X.shape}, y shape: {y.shape}")
-    print(f"y distribution:\n{pd.Series(y).describe()}")
-    
-    # LSTMモデル
-    print("モデルを構築中...")
-    model = Sequential([
-        LSTM(64, return_sequences=True, input_shape=(SEQUENCE_LENGTH, len(FEATURES))),
-        Dropout(0.2),
-        LSTM(32),
-        Dropout(0.2),
-        Dense(1)
-    ])
-    model.compile(optimizer='adam', loss='mse')
-    
-    print("モデルを学習中...")
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-    history = model.fit(
-        X_train, y_train,
-        epochs=30,
-        batch_size=32,
-        validation_data=(X_test, y_test),
-        callbacks=[early_stopping],
-        verbose=1
-    )
-    
-    # Plot training history
-    plt.plot(history.history['loss'], label='train_loss')
-    plt.plot(history.history['val_loss'], label='val_loss')
-    plt.legend()
-    plt.savefig(os.path.join(MODEL_DIR, 'loss_plot.png'))
-    plt.close()
-    
-    # 予測
-    print("予測を生成中...")
-    predictions = model.predict(X, verbose=0)  # Predict on full dataset
-    
-    # 予測結果をデータフレームに追加
-    pred_indices = data.index[SEQUENCE_LENGTH-1:len(X)+SEQUENCE_LENGTH-1]
-    data['Predicted_Return'] = pd.Series(np.concatenate([np.zeros(SEQUENCE_LENGTH-1), predictions.flatten()]), index=data.index)
-    
-    # ポジションサイジング
-    print("ポジションサイジングを計算中...")
-    data['Position_Size'] = np.clip(np.abs(data['Predicted_Return']) * SCALING_FACTOR, 0, MAX_POSITION) * np.sign(data['Predicted_Return'])
-    data['Position_Size'] = np.where(np.abs(data['Position_Size']) < THRESHOLD, 0, data['Position_Size'])
-    
-    # 戦略リターン
-    print("戦略リターンを計算中...")
-    data['Strategy_Return'] = data['Position_Size'] * data['Future_Return']
-    data['Strategy_Return'] = data['Strategy_Return'] - TRANSACTION_COST * data['Position_Size'].diff().abs()
-    
-    # Debug: Check Strategy_Return and trades
-    print(f"Strategy_Return distribution:\n{data['Strategy_Return'].describe()}")
-    trades = data[data['Position_Size'].diff().abs() > 0]
-    print(f"Trades:\n{trades[['Position_Size', 'Predicted_Return', 'Future_Return', 'Strategy_Return']]}")
-    
-    # 結果評価
-    print("結果を評価中...")
-    cumulative_return = (1 + data['Strategy_Return'].fillna(0)).cumprod().iloc[-1]
-    sharpe_ratio = data['Strategy_Return'].mean() / data['Strategy_Return'].std() * np.sqrt(252 * 66) if data['Strategy_Return'].std() != 0 else 0
-    trade_count = int(data['Position_Size'].diff().abs().gt(0).sum())
-    total_cost = TRANSACTION_COST * data['Position_Size'].diff().abs().sum()
-    pred_return_std = data['Predicted_Return'].std()
-    
-    # 結果を保存
-    results = [{
-        'cumulative_return': cumulative_return,
-        'sharpe_ratio': sharpe_ratio,
-        'trade_count': trade_count,
-        'total_cost': total_cost,
-        'pred_return_std': pred_return_std
-    }]
-    pd.DataFrame(results).to_csv(RESULTS_PATH, index=False)
-    
-    # プロット
-    plt.figure(figsize=(10, 6))
-    (1 + data['Strategy_Return'].fillna(0)).cumprod().plot(label='Strategy Cumulative Return')
-    plt.title('Nikkei LSTM Trading Strategy Performance')
-    plt.xlabel('Date')
-    plt.ylabel('Cumulative Return')
-    plt.legend()
-    plt.savefig(PLOT_PATH)
-    plt.close()
-    
-    print("トレーディング結果:")
-    print(f"累積リターン: {cumulative_return:.4f}")
-    print(f"シャープレシオ: {sharpe_ratio:.4f}")
-    print(f"取引回数: {trade_count}")
-    print(f"総取引コスト: {total_cost:.4f}")
-    print(f"予測リターンの標準偏差: {pred_return_std:.4f}")
-    print(f"結果を保存: {RESULTS_PATH}")
-    print(f"パフォーマンスプロット: {PLOT_PATH}")
+        # データ準備
+        features = ['Close', 'Returns', 'RSI', 'MACD', 'BB_Upper', 'BB_Lower', 'Sentiment_Proxy']
+        data = data.dropna()
+        scaler = MinMaxScaler()
+        scaled_data = scaler.fit_transform(data[features])
 
-if __name__ == '__main__':
-    main()
+        X, y = [], []
+        for i in range(len(scaled_data) - seq_len - look_ahead):
+            X.append(scaled_data[i:i + seq_len])
+            y.append(data['Future_Return'].iloc[i + seq_len])
+        X, y = np.array(X), np.array(y)
+
+        if len(X) < 50:
+            continue
+
+        # 訓練・テストデータ分割
+        train_size = int(0.8 * len(X))
+        X_train, X_test = X[:train_size], X[train_size:]
+        y_train, y_test = y[:train_size], y[train_size:]
+
+        # LSTMモデル
+        model = Sequential([
+            LSTM(64, return_sequences=True, input_shape=(seq_len, len(features))),
+            Dropout(0.2),
+            LSTM(32),
+            Dropout(0.2),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mse')
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        model.fit(X_train, y_train, epochs=30, batch_size=32, validation_data=(X_test, y_test), callbacks=[early_stopping], verbose=0)
+
+        # 予測
+        predictions = model.predict(X_test, verbose=0)
+        data['Predicted_Return'] = pd.Series(np.concatenate([np.zeros(train_size + seq_len + look_ahead), predictions.flatten()]), index=data.index)
+
+        # ポジションサイジング
+        max_position = 2.0
+        data['Position_Size'] = np.clip(np.abs(data['Predicted_Return']) * scale_factor, 0, max_position) * np.sign(data['Predicted_Return'])
+        data['Position_Size'] = np.where(np.abs(data['Position_Size']) < thresh, 0, data['Position_Size'])
+
+        # 戦略リターン
+        data['Strategy_Return'] = data['Position_Size'] * data['Future_Return']
+        transaction_cost = 0.001
+        data['Strategy_Return'] = data['Strategy_Return'] - transaction_cost * data['Position_Size'].diff().abs()
+
+        # 結果評価
+        cumulative_return = (1 + data['Strategy_Return'].fillna(0)).cumprod().iloc[-1]
+        sharpe_ratio = data['Strategy_Return'].mean() / data['Strategy_Return'].std() * np.sqrt(252 * 66) if data['Strategy_Return'].std() != 0 else 0
+        trade_count = int(data['Position_Size'].diff().abs().gt(0).sum())
+        total_cost = transaction_cost * data['Position_Size'].diff().abs().sum()
+        pred_return_std = data['Predicted_Return'].std()
+
+        # Save results
+        results.append({
+            'ticker': ticker,
+            'sequence_length': seq_len,
+            'lookahead_period': look_ahead,
+            'scaling_factor': scale_factor,
+            'threshold': thresh,
+            'cumulative_return': cumulative_return,
+            'sharpe_ratio': sharpe_ratio,
+            'trade_count': trade_count,
+            'total_cost': total_cost,
+            'pred_return_std': pred_return_std
+        })
+
+        # Save incrementally
+        pd.DataFrame(results).to_csv('optimization_results.csv', index=False)
+
+    except Exception as e:
+        print(f"Error for {ticker}, seq_len={seq_len}, look_ahead={look_ahead}, scale_factor={scale_factor}, thresh={thresh}: {e}")
+        continue
+
+print("Optimization complete. Results saved to optimization_results.csv")
