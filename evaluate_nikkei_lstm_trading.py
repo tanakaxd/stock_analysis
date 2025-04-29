@@ -80,6 +80,9 @@ def main():
         feature_scaler = scalers['feature']
         target_scaler = scalers['target']
     
+    # モデルを読み込む
+    model = load_model(MODEL_PATH)
+    
     # 特徴量をスケーリング
     feature_data = df[FEATURES].values
     target_data = df[['Future_Return']].values
@@ -93,6 +96,9 @@ def main():
     # 予測
     print("予測を生成中...")
     predictions = model.predict(X, verbose=0)
+    
+    # 予測値を元のスケールに戻す
+    predictions = target_scaler.inverse_transform(predictions)
     
     # 予測結果をデータフレームに追加
     pred_df = pd.DataFrame({

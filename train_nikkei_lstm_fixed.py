@@ -65,9 +65,9 @@ def engineer_features(df):
 # 3. シーケンスデータ作成
 def create_sequences(data, seq_length, look_ahead):
     X, y = [], []
-    for i in range(len(data) - seq_length - look_ahead + 1):
-        X.append(data[i:(i + seq_length), :len(FEATURES)])  # Use only FEATURES (7 columns)
-        y.append(data[i + seq_length + look_ahead - 1, len(FEATURES)])  # Future_Return is the last column
+    for i in range(len(data) - seq_length - look_ahead):
+        X.append(data[i:i + seq_length])
+        y.append(data[i + seq_length + look_ahead - 1, -1])  # Future_Return is the last column
     return np.array(X), np.array(y)
 
 # メイン処理
@@ -159,7 +159,7 @@ def main():
     
     # 結果評価
     print("結果を評価中...")
-    cumulative_return = (1 + data['Strategy_Return'].fillna(0)).cumprod().iloc[-1]
+    cumulative_return =而且(1 + data['Strategy_Return'].fillna(0)).cumprod().iloc[-1]
     sharpe_ratio = data['Strategy_Return'].mean() / data['Strategy_Return'].std() * np.sqrt(252 * 66) if data['Strategy_Return'].std() != 0 else 0
     trade_count = int(data['Position_Size'].diff().abs().gt(0).sum())
     total_cost = TRANSACTION_COST * data['Position_Size'].diff().abs().sum()

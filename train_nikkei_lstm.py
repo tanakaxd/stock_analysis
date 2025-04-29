@@ -168,36 +168,22 @@ def main():
     
     print("モデルを構築中...")
     model = Sequential([
-        LSTM(256, return_sequences=True, input_shape=(SEQUENCE_LENGTH, len(FEATURES))),
-        Dropout(0.3),
-        LSTM(128, return_sequences=True),
-        Dropout(0.3),
+        LSTM(128, return_sequences=True, input_shape=(SEQUENCE_LENGTH, len(FEATURES))),  # Increased capacity
+        Dropout(0.2),
         LSTM(64),
-        Dropout(0.3),
-        Dense(32, activation='relu'),
         Dropout(0.2),
         Dense(1)
     ])
     
-    # 学習率を下げて、より細かい学習を可能に
-    optimizer = Adam(learning_rate=0.0001)
-    model.compile(optimizer=optimizer, loss='mse')
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
     
     print("モデルを学習中...")
-    # 早期停止の条件を緩和（patienceを増やし、min_deltaを追加）
-    early_stopping = EarlyStopping(
-        monitor='val_loss',
-        patience=10,
-        min_delta=0.0001,
-        restore_best_weights=True
-    )
-    
-    # バッチサイズを小さくして、より細かい学習を可能に
+    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=50,  # エポック数を増やす
-        batch_size=16,  # バッチサイズを小さく
+        epochs=30,
+        batch_size=32,
         callbacks=[early_stopping],
         verbose=1
     )
